@@ -22,8 +22,8 @@
         android:fastScrollEnabled="true"
         android:layout_alignRight="@+id/editText"
         android:layout_alignEnd="@+id/editText"
-        android:clickable="false"
-        android:contextClickable="false"
+        android:clickable="true"
+        android:contextClickable="true"
         android:fastScrollAlwaysVisible="false" />
 
     <EditText

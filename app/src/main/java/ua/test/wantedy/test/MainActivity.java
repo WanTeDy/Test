@@ -1,38 +1,212 @@
 package ua.test.wantedy.test;
 
-import android.support.v7.app.AppCompatActivity;
+import android.app.Activity;
+import android.content.Intent;
+import android.os.AsyncTask;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
+import android.widget.EditText;
 import android.widget.ListView;
+import android.widget.SimpleAdapter;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
 
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends Activity {
 
-    private FilmList mFilmList = FilmList.getInstance();
+    ListView mListView;
+    FilmList mFilmList;
+    EditText mEditText;
+    ArrayList<HashMap<String, Object>> mFindList;
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        mListView = (ListView) findViewById(R.id.listView);
+        mEditText = (EditText) findViewById(R.id.editText);
 
-        ListView listView = (ListView) findViewById(R.id.listView);
+        if (savedInstanceState == null) {
+            mFilmList = FilmList.getInstance();
+            String jsonUrl = "http://others.php-cd.attractgroup.com/test.json";
+            DownloadJsonTask downloadJsonTask = new DownloadJsonTask();
+            downloadJsonTask.execute(jsonUrl);
 
-        mFilmList.showList(this, listView);
+        } else {
+            mFilmList = (FilmList) getLastNonConfigurationInstance();
 
+            String[] from = {FilmModel.sNAME, FilmModel.sTIME, FilmModel.sTEMP};
+            int[] to = {R.id.text1, R.id.text2, R.id.image};
+            SimpleAdapter adapter = new SimpleAdapter(getApplicationContext(), mFilmList.getList(), R.layout.list_view, from, to);
 
-        //listView.setOnItemClickListener(itemClickListener);
+            //ImageLoader imageLoader = new ImageLoader(adapter, mListView, MainActivity.this);
+            //imageLoader.imageStartLoad();
+            mListView.setAdapter(adapter);
+        }
+
+        mListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View itemClicked, int position,
+                                    long id) {
+                Intent intent = new Intent(MainActivity.this, DetailActivity.class);
+                if(mFindList != null) {
+                    position = (Integer)mFindList.get(position).get("position");
+                }
+                intent.putExtra("FilmList", mFilmList);
+                intent.putExtra("position", position);
+                startActivity(intent);
+            }
+        });
+
+        mEditText.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void afterTextChanged(Editable s) {
+                String stringText = mEditText.getText().toString().toLowerCase();
+                mFindList = mFilmList.getList();
+                String[] from = {FilmModel.sNAME, FilmModel.sTIME, FilmModel.sTEMP};
+                int[] to = {R.id.text1, R.id.text2, R.id.image};
+                if (stringText != "") {
+                    mFindList = new ArrayList<>();
+                    for (HashMap<String, Object> map : mFilmList.getList()) {
+                        String find = (String) map.get(FilmModel.sNAME);
+                        if (find.toLowerCase().contains(stringText)) {
+                            mFindList.add(map);
+                        }
+                    }
+                }
+                SimpleAdapter adapter = new SimpleAdapter(getBaseContext(), mFindList, R.layout.list_view, from, to);
+                mListView.setAdapter(adapter);
+                //mFindList = null;
+            }
+
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+        });
     }
 
-    AdapterView.OnItemClickListener itemClickListener = new AdapterView.OnItemClickListener() {
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        //outState.putInt("count", cnt);
+    }
+
+    @Override
+    public Object onRetainNonConfigurationInstance() {
+        return mFilmList;
+    }
+
+    private String downloadJsonUrl(String jsonUrl) throws IOException {
+        String data = "";
+        InputStream iStream = null;
+
+        try {
+            URL url = new URL(jsonUrl);
+            HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+            urlConnection.setRequestMethod("GET");
+            urlConnection.connect();
+            iStream = urlConnection.getInputStream();
+
+            BufferedReader br = new BufferedReader(new InputStreamReader(iStream));
+
+            StringBuffer sb = new StringBuffer();
+
+            String line = "";
+            while ((line = br.readLine()) != null) {
+                sb.append(line);
+            }
+            data = sb.toString();
+            br.close();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            iStream.close();
+        }
+        return data;
+    }
+
+    private class DownloadJsonTask extends AsyncTask<String, Integer, String> {
+
         @Override
-        public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-          /*  HashMap<String, Object> itemHashMap = (HashMap<String, Object>) parent.getItemAtPosition(position);
-            String titleItem = itemHashMap.get(TITLE).toString();
-            String descriptionItem = itemHashMap.get(DESCRIPTION).toString();
-            int imageItem = (int)itemHashMap.get(ICON);
-            Toast.makeText(getApplicationContext(),
-                    "Вы выбрали " + titleItem + ". Он " + descriptionItem, Toast.LENGTH_SHORT).show();
-        */}
-    };
+        protected String doInBackground(String... url) {
+            String data = null;
+            try {
+                data = downloadJsonUrl(url[0]);
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return data;
+        }
+
+        @Override
+        protected void onPostExecute(String result) {
+
+            ListViewLoaderTask listViewLoaderTask = new ListViewLoaderTask();
+            listViewLoaderTask.execute(result);
+        }
+    }
+
+    private class ListViewLoaderTask extends AsyncTask<String, Void, SimpleAdapter> {
+
+        @Override
+        protected SimpleAdapter doInBackground(String... strJson) {
+
+            String string = strJson[0];
+            try {
+                JSONArray jsonArray = new JSONArray(string);
+
+                for (int i = 0; i < jsonArray.length(); i++) {
+                    JSONObject jsonfilm = jsonArray.getJSONObject(i);
+
+                    String sItemId = jsonfilm.getString("itemId");
+                    int itemId = 0;
+                    itemId = Integer.parseInt(sItemId);
+                    String name = jsonfilm.getString("name");
+                    String imgUrl = jsonfilm.getString("image");
+                    String description = jsonfilm.getString("description");
+                    long time = jsonfilm.getLong("time");
+                    Date date = new Date();
+                    date.setTime(time);
+                    SimpleDateFormat format = new SimpleDateFormat("dd-MM-yyyy hh:mm");
+                    String sTime = format.format(date);
+                    mFilmList.add(new FilmModel(name, sTime, imgUrl, description, itemId));
+                }
+            } catch (Exception e) {
+                Log.d("JSON Exception1", e.toString());
+            }
+            String[] from = {FilmModel.sNAME, FilmModel.sTIME, FilmModel.sTEMP};
+            int[] to = {R.id.text1, R.id.text2, R.id.image};
+            SimpleAdapter adapter = new SimpleAdapter(getApplicationContext(), mFilmList.getList(), R.layout.list_view, from, to);
+
+            return adapter;
+        }
+
+        @Override
+        protected void onPostExecute(SimpleAdapter adapter) {
+
+            ImageLoader imageLoader = new ImageLoader(adapter, mListView, MainActivity.this);
+            imageLoader.imageStartLoad();
+        }
+    }
 }
