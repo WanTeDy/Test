@@ -2,6 +2,7 @@ package ua.test.wantedy.test;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.text.Editable;
@@ -44,29 +45,26 @@ public class MainActivity extends Activity {
 
         if (savedInstanceState == null) {
             mFilmList = FilmList.getInstance();
-            String jsonUrl = "http://others.php-cd.attractgroup.com/test.json";
-            DownloadJsonTask downloadJsonTask = new DownloadJsonTask();
-            downloadJsonTask.execute(jsonUrl);
-
+            if (mFilmList.getList().size() == 0) {
+                String jsonUrl = "http://others.php-cd.attractgroup.com/test.json";
+                DownloadJsonTask downloadJsonTask = new DownloadJsonTask();
+                downloadJsonTask.execute(jsonUrl);
+            } else {
+                prepareSetAdapter(mFilmList.getList());
+            }
         } else {
             mFilmList = (FilmList) getLastNonConfigurationInstance();
-
-            String[] from = {FilmModel.sNAME, FilmModel.sTIME, FilmModel.sTEMP};
-            int[] to = {R.id.text1, R.id.text2, R.id.image};
-            SimpleAdapter adapter = new SimpleAdapter(getApplicationContext(), mFilmList.getList(), R.layout.list_view, from, to);
-
-            //ImageLoader imageLoader = new ImageLoader(adapter, mListView, MainActivity.this);
-            //imageLoader.imageStartLoad();
-            mListView.setAdapter(adapter);
+            prepareSetAdapter(mFilmList.getList());
         }
+
 
         mListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View itemClicked, int position,
                                     long id) {
                 Intent intent = new Intent(MainActivity.this, DetailActivity.class);
-                if(mFindList != null) {
-                    position = (Integer)mFindList.get(position).get("position");
+                if (mFindList != null) {
+                    position = (Integer) mFindList.get(position).get("position");
                 }
                 intent.putExtra("FilmList", mFilmList);
                 intent.putExtra("position", position);
@@ -79,8 +77,6 @@ public class MainActivity extends Activity {
             public void afterTextChanged(Editable s) {
                 String stringText = mEditText.getText().toString().toLowerCase();
                 mFindList = mFilmList.getList();
-                String[] from = {FilmModel.sNAME, FilmModel.sTIME, FilmModel.sTEMP};
-                int[] to = {R.id.text1, R.id.text2, R.id.image};
                 if (stringText != "") {
                     mFindList = new ArrayList<>();
                     for (HashMap<String, Object> map : mFilmList.getList()) {
@@ -90,9 +86,7 @@ public class MainActivity extends Activity {
                         }
                     }
                 }
-                SimpleAdapter adapter = new SimpleAdapter(getBaseContext(), mFindList, R.layout.list_view, from, to);
-                mListView.setAdapter(adapter);
-                //mFindList = null;
+                prepareSetAdapter(mFindList);
             }
 
             @Override
@@ -105,9 +99,11 @@ public class MainActivity extends Activity {
         });
     }
 
-    protected void onSaveInstanceState(Bundle outState) {
-        super.onSaveInstanceState(outState);
-        //outState.putInt("count", cnt);
+    private void prepareSetAdapter (ArrayList<HashMap<String, Object>> list) {
+        String[] from = {FilmModel.sNAME, FilmModel.sTIME, FilmModel.sTEMP};
+        int[] to = {R.id.text1, R.id.text2, R.id.image};
+        SimpleAdapter adapter = new SimpleAdapter(getApplicationContext(), list, R.layout.list_view, from, to);
+        mListView.setAdapter(adapter);
     }
 
     @Override
@@ -115,7 +111,8 @@ public class MainActivity extends Activity {
         return mFilmList;
     }
 
-    private String downloadJsonUrl(String jsonUrl) throws IOException {
+    private String downloadJsonUrl(String jsonUrl) {
+
         String data = "";
         InputStream iStream = null;
 
@@ -140,7 +137,11 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
-            iStream.close();
+            try {
+                iStream.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
         return data;
     }
@@ -149,21 +150,24 @@ public class MainActivity extends Activity {
 
         @Override
         protected String doInBackground(String... url) {
-            String data = null;
-            try {
-                data = downloadJsonUrl(url[0]);
-
-            } catch (Exception e) {
-                e.printStackTrace();
+            if (url[0] != null) {
+                String data = null;
+                try {
+                    data = downloadJsonUrl(url[0]);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                return data;
             }
-            return data;
+            return null;
         }
 
         @Override
         protected void onPostExecute(String result) {
-
-            ListViewLoaderTask listViewLoaderTask = new ListViewLoaderTask();
-            listViewLoaderTask.execute(result);
+            if (result != null) {
+                ListViewLoaderTask listViewLoaderTask = new ListViewLoaderTask();
+                listViewLoaderTask.execute(result);
+            }
         }
     }
 
@@ -193,7 +197,7 @@ public class MainActivity extends Activity {
                     mFilmList.add(new FilmModel(name, sTime, imgUrl, description, itemId));
                 }
             } catch (Exception e) {
-                Log.d("JSON Exception1", e.toString());
+                e.printStackTrace();
             }
             String[] from = {FilmModel.sNAME, FilmModel.sTIME, FilmModel.sTEMP};
             int[] to = {R.id.text1, R.id.text2, R.id.image};

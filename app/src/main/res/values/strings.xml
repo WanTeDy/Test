@@ -1,4 +1,9 @@
 <resources>
     <string name="app_name">Test JSON</string>
     <string name="filter">Введите фильтр</string>
+    <string name="image">Img</string>
+    <string name="desc">Description</string>
+    <string name="time">time</string>
+    <string name="Title">Title</string>
+    <string name="img">Img</string>
 </resources>
